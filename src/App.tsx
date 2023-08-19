@@ -3,11 +3,24 @@ import './App.css'
 import { SortBy, type User } from './types.d'
 import UsersList from './components/UsersList'
 
+const fetchUsers = async (page: number) => {
+  return await fetch(`https://randomuser.me/api/?results=10&seed="rm&page=${page}`)
+    .then(res => {
+      if (!res.ok) throw new Error('error en la petición')
+      return res.json()
+    })
+    .then(res => res.results)
+}
+
 function App() {
   const [users, setUsers] = useState<User[]>([])
   const [showColors, setShowColors] = useState(false)
   const [sorting, setSorting] = useState<SortBy>(SortBy.NONE)
   const [filterCountry, setFilterCountry] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+
   const originalUsers = useRef<User[]>([])
 
   const toggleColors = () => {
@@ -33,16 +46,23 @@ function App() {
   }
 
   useEffect(() => {
-    fetch('https://randomuser.me/api/?results=100')
-      .then(res => res.json())
-      .then(data => {
-        setUsers(data.results)
-        originalUsers.current = data.results
+    setLoading(true)
+    setError(false)
+    fetchUsers(currentPage)
+      .then(users => {
+        setUsers((prevUsers) => {
+          const newUsers = prevUsers.concat(users)
+          originalUsers.current = newUsers
+          return newUsers
+        })
       })
       .catch(err => {
+        setError(err)
         console.error(err)
+      }).finally(() => {
+        setLoading(false)
       })
-  }, [])
+  }, [currentPage])
 
   const filteredUsers = useMemo(() => {
     return typeof filterCountry === 'string' && filterCountry.length > 0
@@ -91,11 +111,15 @@ function App() {
         </button>
         <input placeholder='Filtra por país' value={filterCountry ?? ''} onChange={onChangeFilterCountry} />
       </header>
-      <UsersList
+      {users.length > 0 && <UsersList
         changeSorting={handleChangeSort}
         handleDelete={handleDelete}
         users={sortedUsers}
-        showColors={showColors} />
+        showColors={showColors} />}
+      {loading && <strong>Cargando...</strong>}
+      {error && <p>Ha habido un error</p>}
+      {!error && users.length === 0 && <p>No hay usuarios</p>}
+      {!loading && !error && <button onClick={() => { setCurrentPage(currentPage + 1) }}>Cargar más resultados</button>}
     </div>
   )
 }
